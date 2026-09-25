@@ -1,4 +1,5 @@
-"""Project endpoints: POST /projects, GET /projects, GET /projects/{id}/history."""
+"""Project endpoints: POST /projects, GET /projects, GET /projects/{id}/history,
+POST /projects/{id}/analyses (create analysis)."""
 from __future__ import annotations
 
 import uuid
@@ -10,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models import Project, ReleaseAnalysis
-from app.schemas import AnalysisRead, ProjectCreate, ProjectRead
+from app.models import Project, ReleaseAnalysis, AnalysisStatus
+from app.schemas import AnalysisCreate, AnalysisRead, ProjectCreate, ProjectRead
 
 router = APIRouter()
 
@@ -64,3 +65,31 @@ async def project_history(
     )
     analyses = result.scalars().all()
     return [AnalysisRead.model_validate(a) for a in analyses]
+
+
+@router.post("/{project_id}/analyses", response_model=AnalysisRead, status_code=status.HTTP_201_CREATED)
+async def create_analysis(
+    project_id: uuid.UUID,
+    body: AnalysisCreate,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_user),
+) -> AnalysisRead:
+    """Start a new release-readiness analysis (triggers background pipeline)."""
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    analysis = ReleaseAnalysis(
+        project_id=project_id,
+        base_ref=body.base_ref,
+        target_ref=body.target_ref,
+        status=AnalysisStatus.PENDING,
+    )
+    db.add(analysis)
+    await db.commit()
+    await db.refresh(analysis)
+
+    from app.tasks import run_analysis_task
+    run_analysis_task.delay(str(analysis.id))
+
+    return AnalysisRead.model_validate(analysis)

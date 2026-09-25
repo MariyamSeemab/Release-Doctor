@@ -101,11 +101,14 @@ export default function AnalysisWorkspacePage() {
             )}
             {analysis.status === 'COMPLETED' && (
               <>
-                <Link href={`/analyses/${id}/findings`} className="btn-primary text-sm">
-                  View Findings
+                <Link href={`/analyses/${id}/health`} className="btn-primary text-sm">
+                  Health Dashboard
+                </Link>
+                <Link href={`/analyses/${id}/findings`} className="btn-secondary text-sm">
+                  Findings
                 </Link>
                 <Link href={`/analyses/${id}/remediation`} className="btn-secondary text-sm">
-                  Remediation Plan
+                  Remediation
                 </Link>
               </>
             )}

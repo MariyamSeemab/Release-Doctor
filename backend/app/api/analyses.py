@@ -1,4 +1,4 @@
-"""Analysis endpoints — all 9 analysis routes from Section 6."""
+"""Analysis endpoints — all analysis routes from Section 6."""
 from __future__ import annotations
 
 import uuid
@@ -14,21 +14,15 @@ from app.models import (
     AgentRun,
     AnalysisComparison,
     Finding,
-    Project,
     ReleaseAnalysis,
     RemediationTask,
-    RiskRelation,
     AnalysisStatus,
 )
 from app.schemas import (
     AgentRunRead,
-    AnalysisCreate,
     AnalysisRead,
     ComparisonRead,
     FindingRead,
-    ImpactEdge,
-    ImpactMapRead,
-    ImpactNode,
     RemediationTaskRead,
     RemediationTaskUpdate,
 )
@@ -36,41 +30,6 @@ from app.services.comparison import build_comparison
 from app.services.impact_map import build_impact_map
 
 router = APIRouter()
-
-
-@router.post(
-    "/{project_id}/analyses",
-    response_model=AnalysisRead,
-    status_code=status.HTTP_201_CREATED,
-    tags=["analyses"],
-)
-async def create_analysis(
-    project_id: uuid.UUID,
-    body: AnalysisCreate,
-    db: AsyncSession = Depends(get_db),
-    _user: str = Depends(get_current_user),
-) -> AnalysisRead:
-    """Start a new release-readiness analysis (triggers background pipeline)."""
-    project = await db.get(Project, project_id)
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-
-    analysis = ReleaseAnalysis(
-        project_id=project_id,
-        base_ref=body.base_ref,
-        target_ref=body.target_ref,
-        status=AnalysisStatus.PENDING,
-    )
-    db.add(analysis)
-    await db.commit()
-    await db.refresh(analysis)
-
-    # Enqueue the background pipeline
-    from app.tasks import run_analysis_task
-
-    run_analysis_task.delay(str(analysis.id))
-
-    return AnalysisRead.model_validate(analysis)
 
 
 @router.get("/{analysis_id}", response_model=AnalysisRead)

@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.db
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+
+# Environment
+.env
+.env.local
+
+# Uploads
+/tmp/release-doctor-uploads/
+
+# Test artifacts
+test-results/
+playwright-report/
