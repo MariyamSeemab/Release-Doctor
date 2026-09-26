@@ -89,7 +89,7 @@ async def create_analysis(
     await db.commit()
     await db.refresh(analysis)
 
-    from app.tasks import run_analysis_task
-    run_analysis_task.delay(str(analysis.id))
+    from app.tasks import dispatch_analysis
+    dispatch_analysis(str(analysis.id))
 
     return AnalysisRead.model_validate(analysis)

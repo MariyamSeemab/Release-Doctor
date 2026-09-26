@@ -9,7 +9,7 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
-    Enum,
+    Enum as _SAEnum,
     ForeignKey,
     Integer,
     String,
@@ -17,10 +17,16 @@ from sqlalchemy import (
     JSON,
     func,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+
+
+def Enum(*args, **kwargs):
+    """Wrap SQLAlchemy Enum with native_enum=False for SQLite compatibility."""
+    kwargs.setdefault("native_enum", False)
+    return _SAEnum(*args, **kwargs)
 
 
 # ── Enumerations ──────────────────────────────────────────────────────────────
@@ -113,7 +119,7 @@ class RelationshipType(str, enum.Enum):
 class Project(Base):
     __tablename__ = "projects"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     repository: Mapped[str] = mapped_column(String(1024), nullable=False)
     default_branch: Mapped[str] = mapped_column(String(255), default="main")
@@ -129,7 +135,7 @@ class Project(Base):
 class ReleaseAnalysis(Base):
     __tablename__ = "release_analyses"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("projects.id"), nullable=False)
     base_ref: Mapped[str] = mapped_column(String(512), nullable=False)
     target_ref: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -144,7 +150,7 @@ class ReleaseAnalysis(Base):
     change_map: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    project: Mapped["Project"] = relationship("Project", back_populates="analyses")
+    project: Mapped["Project"] = relationship("Project", back_populates="analyses", lazy="selectin")
     agent_runs: Mapped[list["AgentRun"]] = relationship("AgentRun", back_populates="analysis")
     findings: Mapped[list["Finding"]] = relationship("Finding", back_populates="analysis")
     artifacts: Mapped[list["Artifact"]] = relationship("Artifact", back_populates="analysis")
@@ -155,7 +161,7 @@ class ReleaseAnalysis(Base):
 class AgentRun(Base):
     __tablename__ = "agent_runs"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     analysis_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("release_analyses.id"), nullable=False)
     agent_type: Mapped[AgentType] = mapped_column(Enum(AgentType), nullable=False)
     status: Mapped[AgentStatus] = mapped_column(
@@ -176,7 +182,7 @@ class Finding(Base):
 
     __tablename__ = "findings"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     analysis_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("release_analyses.id"), nullable=False)
     agent_run_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         ForeignKey("agent_runs.id"), nullable=True
@@ -222,7 +228,7 @@ class Finding(Base):
 class Artifact(Base):
     __tablename__ = "artifacts"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     analysis_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("release_analyses.id"), nullable=False)
     type: Mapped[ArtifactType] = mapped_column(Enum(ArtifactType), nullable=False)
     name: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -237,7 +243,7 @@ class Artifact(Base):
 class RiskRelation(Base):
     __tablename__ = "risk_relations"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     analysis_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("release_analyses.id"), nullable=False)
     finding_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("findings.id"), nullable=False)
     related_finding_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("findings.id"), nullable=False)
@@ -251,7 +257,7 @@ class RiskRelation(Base):
 class RemediationTask(Base):
     __tablename__ = "remediation_tasks"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     analysis_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("release_analyses.id"), nullable=False)
     finding_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("findings.id"), nullable=True)
     title: Mapped[str] = mapped_column(String(512), nullable=False)
@@ -272,7 +278,7 @@ class RemediationTask(Base):
 class AnalysisComparison(Base):
     __tablename__ = "analysis_comparisons"
 
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     previous_analysis_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("release_analyses.id"), nullable=False
     )

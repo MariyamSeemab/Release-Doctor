@@ -17,9 +17,11 @@ if config.config_file_name is not None:
 
 # Override URL from environment
 database_url = os.environ.get("DATABASE_URL", "")
-# Convert asyncpg URL to sync for Alembic
+# Convert async driver URLs to sync equivalents for Alembic
 if database_url.startswith("postgresql+asyncpg://"):
     database_url = database_url.replace("postgresql+asyncpg://", "postgresql://")
+elif database_url.startswith("sqlite+aiosqlite://"):
+    database_url = database_url.replace("sqlite+aiosqlite://", "sqlite://")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 

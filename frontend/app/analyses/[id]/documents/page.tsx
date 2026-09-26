@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { getToken } from '@/lib/api'
+import { api, getToken } from '@/lib/api'
 import { Header } from '@/components/Header'
 import { Card, LoadingSpinner, ErrorState, EmptyState } from '@/components/ui'
 
@@ -30,13 +30,8 @@ export default function DocumentsPage() {
 
   async function fetchArtifacts() {
     try {
-      const token = getToken()
-      const res = await fetch(`${API_URL}/api/analyses/${id}/findings`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      // We don't have a direct artifact list endpoint per analysis — use a simple fetch
-      // For now show placeholder; in production add GET /api/analyses/{id}/artifacts
-      setArtifacts([])
+      const data = await api.getArtifacts(id)
+      setArtifacts(data)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load')
     } finally {

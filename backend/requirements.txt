@@ -16,6 +16,7 @@ passlib[bcrypt]==1.7.4
 # ── Background jobs ───────────────────────────────────────────────
 celery==5.4.0
 redis==5.0.6
+aioredis==2.0.1
 
 # ── Repository analysis ───────────────────────────────────────────
 gitpython==3.1.43

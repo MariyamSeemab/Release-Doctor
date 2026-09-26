@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
 
 
 revision = "001_initial"
@@ -15,7 +14,7 @@ depends_on = None
 def upgrade() -> None:
     op.create_table(
         "projects",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
+        sa.Column("id", sa.Uuid(), primary_key=True),
         sa.Column("name", sa.String(255), nullable=False),
         sa.Column("repository", sa.String(1024), nullable=False),
         sa.Column("default_branch", sa.String(255), server_default="main"),
@@ -26,8 +25,8 @@ def upgrade() -> None:
 
     op.create_table(
         "release_analyses",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("project_id", UUID(as_uuid=True), sa.ForeignKey("projects.id"), nullable=False),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("project_id", sa.Uuid(), sa.ForeignKey("projects.id"), nullable=False),
         sa.Column("base_ref", sa.String(512), nullable=False),
         sa.Column("target_ref", sa.String(512), nullable=False),
         sa.Column("status", sa.String(50), nullable=False, server_default="PENDING"),
@@ -40,8 +39,8 @@ def upgrade() -> None:
 
     op.create_table(
         "agent_runs",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
         sa.Column("agent_type", sa.String(50), nullable=False),
         sa.Column("status", sa.String(50), nullable=False, server_default="PENDING"),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
@@ -53,9 +52,9 @@ def upgrade() -> None:
 
     op.create_table(
         "findings",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
-        sa.Column("agent_run_id", UUID(as_uuid=True), sa.ForeignKey("agent_runs.id"), nullable=True),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("agent_run_id", sa.Uuid(), sa.ForeignKey("agent_runs.id"), nullable=True),
         sa.Column("severity", sa.String(50), nullable=False),
         sa.Column("confidence", sa.String(50), nullable=False),
         sa.Column("category", sa.String(255), nullable=False),
@@ -81,8 +80,8 @@ def upgrade() -> None:
 
     op.create_table(
         "artifacts",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
         sa.Column("type", sa.String(50), nullable=False),
         sa.Column("name", sa.String(512), nullable=False),
         sa.Column("content", sa.Text(), nullable=True),
@@ -93,18 +92,18 @@ def upgrade() -> None:
 
     op.create_table(
         "risk_relations",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
-        sa.Column("finding_id", UUID(as_uuid=True), sa.ForeignKey("findings.id"), nullable=False),
-        sa.Column("related_finding_id", UUID(as_uuid=True), sa.ForeignKey("findings.id"), nullable=False),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("finding_id", sa.Uuid(), sa.ForeignKey("findings.id"), nullable=False),
+        sa.Column("related_finding_id", sa.Uuid(), sa.ForeignKey("findings.id"), nullable=False),
         sa.Column("relationship_type", sa.String(50), nullable=False),
     )
 
     op.create_table(
         "remediation_tasks",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
-        sa.Column("finding_id", UUID(as_uuid=True), sa.ForeignKey("findings.id"), nullable=True),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("finding_id", sa.Uuid(), sa.ForeignKey("findings.id"), nullable=True),
         sa.Column("title", sa.String(512), nullable=False),
         sa.Column("priority", sa.Integer(), nullable=False, server_default="5"),
         sa.Column("status", sa.String(50), nullable=False, server_default="OPEN"),
@@ -115,9 +114,9 @@ def upgrade() -> None:
 
     op.create_table(
         "analysis_comparisons",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True),
-        sa.Column("previous_analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
-        sa.Column("current_analysis_id", UUID(as_uuid=True), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("id", sa.Uuid(), primary_key=True),
+        sa.Column("previous_analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
+        sa.Column("current_analysis_id", sa.Uuid(), sa.ForeignKey("release_analyses.id"), nullable=False),
         sa.Column("resolved_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("new_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("remaining_count", sa.Integer(), nullable=False, server_default="0"),

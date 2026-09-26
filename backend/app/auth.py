@@ -4,22 +4,24 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+import bcrypt
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
 # Prototype: single demo user — replace with DB lookup in production
-DEMO_USER = {"username": "demo", "password_hash": pwd_context.hash("demo")}
+DEMO_USER = {
+    "username": "demo",
+    "password_hash": bcrypt.hashpw(b"demo", bcrypt.gensalt()).decode(),
+}
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:

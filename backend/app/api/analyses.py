@@ -12,7 +12,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models import (
     AgentRun,
-    AnalysisComparison,
+    Artifact,
     Finding,
     ReleaseAnalysis,
     RemediationTask,
@@ -21,8 +21,10 @@ from app.models import (
 from app.schemas import (
     AgentRunRead,
     AnalysisRead,
+    ArtifactRead,
     ComparisonRead,
     FindingRead,
+    ImpactMapRead,
     RemediationTaskRead,
     RemediationTaskUpdate,
 )
@@ -155,9 +157,8 @@ async def rerun_analysis(
     await db.commit()
     await db.refresh(new_analysis)
 
-    from app.tasks import run_analysis_task
-
-    run_analysis_task.delay(str(new_analysis.id))
+    from app.tasks import dispatch_analysis
+    dispatch_analysis(str(new_analysis.id))
     return AnalysisRead.model_validate(new_analysis)
 
 
@@ -184,3 +185,17 @@ async def cancel_analysis(
         raise HTTPException(status_code=400, detail="Analysis is not in a cancellable state")
     analysis.status = AnalysisStatus.CANCELLED
     await db.commit()
+
+
+@router.get("/{analysis_id}/artifacts", response_model=List[ArtifactRead])
+async def get_artifacts(
+    analysis_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: str = Depends(get_current_user),
+) -> List[ArtifactRead]:
+    result = await db.execute(
+        select(Artifact)
+        .where(Artifact.analysis_id == analysis_id)
+        .order_by(Artifact.created_at.desc())
+    )
+    return [ArtifactRead.model_validate(a) for a in result.scalars().all()]

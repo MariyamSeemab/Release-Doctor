@@ -221,6 +221,11 @@ export const api = {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${getToken()}` },
     }),
+
+  getArtifacts: (analysisId: string) =>
+    apiFetch<{ id: string; analysis_id: string; type: string; name: string; reference: string | null; created_at: string }[]>(
+      `/api/analyses/${analysisId}/artifacts`
+    ),
 }
 
 // ── WebSocket ─────────────────────────────────────────────────────────────────
