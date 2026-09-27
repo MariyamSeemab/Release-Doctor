@@ -2,8 +2,36 @@
  * Release Doctor API client — typed fetch wrapper for all backend endpoints.
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
+/**
+ * Resolve the API + WebSocket base URLs.
+ *
+ * Priority:
+ *   1. NEXT_PUBLIC_API_URL / NEXT_PUBLIC_WS_URL when set at build time
+ *      (used by the Railway + Vercel deployment, where the API lives on a
+ *      different origin than the frontend).
+ *   2. Same-origin fallback in the browser. On the AWS ECS deployment the
+ *      frontend and API share one Application Load Balancer origin, and the
+ *      ALB DNS name is only known at deploy time — so we derive it from
+ *      window.location at runtime instead of baking it into the bundle.
+ *   3. localhost defaults for server-side rendering / local dev.
+ */
+function resolveApiUrl(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+  if (typeof window !== 'undefined') return window.location.origin
+  return 'http://localhost:8000'
+}
+
+function resolveWsUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL
+  if (typeof window !== 'undefined') {
+    const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    return `${proto}//${window.location.host}`
+  }
+  return 'ws://localhost:8000'
+}
+
+const API_URL = resolveApiUrl()
+const WS_URL = resolveWsUrl()
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

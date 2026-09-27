@@ -56,8 +56,10 @@ services:
         condition: service_healthy
     volumes:
       - ./backend:/app
-      - ./demo-repository:/demo-repository:ro
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+      # Not read-only: init-git.sh initializes the demo repo's git history here.
+      - ./demo-repository:/demo-repository
+    # Initialize the demo git repo (clean -> risky), then start the API with reload.
+    command: sh -c "git config --global --add safe.directory /demo-repository; sh /demo-repository/init-git.sh /demo-repository || true; uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
 
   celery_worker:
     build:

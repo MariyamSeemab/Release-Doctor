@@ -31,9 +31,15 @@ open http://localhost:3000
   - Name: `OrderFlow`
   - Repository: `/demo-repository`
   - Default branch: `master`
-  - Base ref: `b9bca29` *(first commit — clean state)*
-  - Target ref: `477e1a9` *(second commit — planted risks)*
+  - Base ref: `clean` *(first commit — clean state)*
+  - Target ref: `risky` *(second commit — planted risks)*
 - Click **"⚕ Start Release Analysis"**
+
+> **Refs note:** On a fresh clone / Docker / AWS deploy, the demo repo is
+> initialized with the stable tags `clean` and `risky` (by
+> `demo-repository/init-git.sh`, run automatically on backend startup). Use
+> those tag names. The original build used commit SHAs `b9bca29` / `477e1a9`,
+> which only existed in the original authoring environment.
 
 > **What happens:** The backend creates an `Analysis` record, enqueues a Celery task, and redirects to the Analysis Workspace.
 

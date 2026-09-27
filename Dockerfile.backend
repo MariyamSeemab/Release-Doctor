@@ -1,0 +1,35 @@
+# Backend image for AWS (ECS Fargate) — built from the REPO ROOT context so it
+# can bundle both the backend application and the demo-repository (needed for
+# the flagship end-to-end demo, which analyzes the demo repo's git history).
+#
+# Local dev / Railway continue to use backend/Dockerfile (backend-only context).
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# System dependencies for GitPython, psycopg2, and the demo git-repo init.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python deps first for layer caching.
+COPY backend/requirements.txt backend/requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Backend application.
+COPY backend/ /app/
+
+# Demo repository (the sample app that Release Doctor analyzes end-to-end).
+# Shipped with a .baseline/ of clean file versions + init-git.sh which builds
+# the two-commit history (tags: clean -> risky) on first container start.
+COPY demo-repository/ /demo-repository/
+
+RUN chmod +x /app/entrypoint.sh /demo-repository/init-git.sh
+
+EXPOSE 8000
+
+# Entrypoint composes DATABASE_URL from DB_* secrets, initializes the demo
+# git repo, runs migrations, and starts uvicorn.
+CMD ["/app/entrypoint.sh"]

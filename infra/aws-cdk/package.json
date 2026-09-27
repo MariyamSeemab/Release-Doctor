@@ -1,0 +1,28 @@
+{
+  "name": "release-doctor-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK infrastructure for Release Doctor (ECS Fargate + RDS + ALB)",
+  "bin": {
+    "release-doctor-infra": "bin/release-doctor.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "synth": "cdk synth",
+    "diff": "cdk diff",
+    "deploy": "cdk deploy",
+    "destroy": "cdk destroy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "aws-cdk": "^2.150.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0"
+  }
+}

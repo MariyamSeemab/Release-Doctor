@@ -1,0 +1,5 @@
+# Shell scripts must use LF so they run correctly inside Linux containers,
+# regardless of the checkout platform.
+*.sh text eol=lf
+entrypoint.sh text eol=lf
+init-git.sh text eol=lf

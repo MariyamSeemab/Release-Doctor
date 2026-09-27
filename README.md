@@ -348,9 +348,34 @@ Services started:
 
 ---
 
+## Deployment (AWS — ECS Fargate)
+
+Deploy the entire stack to AWS with a single CloudFormation stack managed by AWS CDK. The frontend, backend, and PostgreSQL run behind one Application Load Balancer; credentials live in AWS Secrets Manager.
+
+```bash
+cd infra/aws-cdk
+npm install
+npx cdk bootstrap aws://<ACCOUNT_ID>/<REGION>   # one-time per account/region
+npx cdk deploy                                   # builds images, provisions everything
+```
+
+CDK prints an `AppURL` output — open it and log in with `demo` / `demo`.
+
+- **Backend + frontend** run as ECS Fargate services (private subnets).
+- **PostgreSQL** runs on RDS (isolated subnets), credentials auto-generated in Secrets Manager.
+- **WebSocket streaming** works over the same ALB — no extra config.
+- **Inline task mode** is on (`USE_INLINE_TASKS=true`), so no Redis is provisioned. To scale out with Redis + a Celery worker, see the "Adding Redis" section in the infra README.
+- **The demo works out of the box.** The backend image bundles `demo-repository/` and initializes it as a two-commit git repo on startup. Create a project pointing at `/demo-repository` with base ref `clean` and target ref `risky` to run the full 8-risk analysis. See the infra README's "Running the end-to-end demo on AWS".
+
+Full guide, configuration options, cost notes, and teardown: [`infra/aws-cdk/README.md`](./infra/aws-cdk/README.md).
+
+Tear down with `npx cdk destroy` from `infra/aws-cdk`.
+
+---
+
 ## Deployment (Railway + Vercel)
 
-The recommended deployment path for judges and reviewers. **Free tier available** — Railway provides $5 in trial credit, Vercel is free.
+An alternative deployment path. **Free tier available** — Railway provides $5 in trial credit, Vercel is free.
 
 ### Step 1 — Backend on Railway
 

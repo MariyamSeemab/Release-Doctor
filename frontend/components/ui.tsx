@@ -35,8 +35,20 @@ export function SeverityBadge({ severity }: { severity: Severity }) {
 
 // ── Card ──────────────────────────────────────────────────────────────────────
 
-export function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <div className={`card p-4 ${className}`}>{children}</div>
+export function Card({
+  children,
+  className = '',
+  onClick,
+}: {
+  children: React.ReactNode
+  className?: string
+  onClick?: React.MouseEventHandler<HTMLDivElement>
+}) {
+  return (
+    <div className={`card p-4 ${className}`} onClick={onClick}>
+      {children}
+    </div>
+  )
 }
 
 // ── LoadingSpinner ────────────────────────────────────────────────────────────
