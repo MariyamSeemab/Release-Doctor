@@ -19,6 +19,10 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV production
+# Next.js standalone server reads HOSTNAME/PORT. Bind to 0.0.0.0 so the
+# container is reachable by external health checks (App Runner, ALB).
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public

@@ -14,11 +14,11 @@ const region =
   process.env.CDK_DEFAULT_REGION ||
   'us-east-1';
 
+// ── ECS Fargate deployment (single ALB, SQLite) ───────────────────────────
 new ReleaseDoctorStack(app, 'ReleaseDoctorStack', {
   env: { account, region },
   description:
     'Release Doctor - multi-agent release-readiness analysis on ECS Fargate',
-  // Set -c dbAllocatedStorage / -c desiredCount etc. at deploy time if needed.
 });
 
 app.synth();
