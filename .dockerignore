@@ -1,35 +1,30 @@
-# Keep the Docker build context lean for the root-context backend image
-# (Dockerfile.backend). Only backend/ and demo-repository/ are needed.
+# Root build context ignore for the backend image (Dockerfile.backend), which
+# builds from the repo root. Dockerfile.backend only COPYs backend/ and
+# demo-repository/, so we only need to trim heavy/irrelevant paths here.
+#
+# NOTE: do NOT exclude whole top-level app dirs like `frontend/` — CDK stages
+# each DockerImageAsset from its own directory and this file can be consulted
+# during that staging, which previously wiped the frontend build context.
 
 # Version control
 .git
-.gitignore
 
-# Frontend (not part of the backend image)
-frontend
-
-# Infra / CDK
-infra
-cdk.out
-
-# Node
+# Node / build artifacts anywhere
 **/node_modules
+**/.next
+infra/aws-cdk/cdk.out
 
-# Python caches / local artifacts
+# Python caches / local DBs
 **/__pycache__
 **/*.pyc
 **/.pytest_cache
 **/.mypy_cache
 **/.ruff_cache
-backend/*.db
-backend/release_doctor.db
+**/*.db
 
-# Bob session transcripts and docs not needed at runtime
-bob_sessions
-
-# Env files (never bake secrets into images)
-.env
+# Never bake env files with secrets into images
 **/.env
+**/.env.local
 
 # Editor / OS cruft
 .vscode

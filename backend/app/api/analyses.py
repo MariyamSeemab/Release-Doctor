@@ -5,6 +5,7 @@ import uuid
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -172,12 +173,16 @@ async def get_comparison(
     return await build_comparison(previous_analysis_id, analysis_id, db)
 
 
-@router.delete("/{analysis_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{analysis_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+)
 async def cancel_analysis(
     analysis_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _user: str = Depends(get_current_user),
-) -> None:
+) -> Response:
     analysis = await db.get(ReleaseAnalysis, analysis_id)
     if not analysis:
         raise HTTPException(status_code=404, detail="Analysis not found")
@@ -185,6 +190,7 @@ async def cancel_analysis(
         raise HTTPException(status_code=400, detail="Analysis is not in a cancellable state")
     analysis.status = AnalysisStatus.CANCELLED
     await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{analysis_id}/artifacts", response_model=List[ArtifactRead])

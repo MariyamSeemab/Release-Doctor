@@ -1,0 +1,9 @@
+# Frontend build context (Next.js standalone image).
+node_modules
+.next
+npm-debug.log
+.env
+.env.local
+e2e
+playwright-report
+test-results

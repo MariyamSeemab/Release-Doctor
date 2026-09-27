@@ -361,10 +361,11 @@ npx cdk deploy                                   # builds images, provisions eve
 
 CDK prints an `AppURL` output — open it and log in with `demo` / `demo`.
 
-- **Backend + frontend** run as ECS Fargate services (private subnets).
-- **PostgreSQL** runs on RDS (isolated subnets), credentials auto-generated in Secrets Manager.
+- **Backend + frontend** run as ECS Fargate services in public subnets (public IP, no NAT gateway).
+- **SQLite in-container** — the app's zero-infra database mode. No RDS, so it's cheap (~$20-35/mo) and deploys in ~4 min. Data is ephemeral; see the infra README's "Scaling to RDS" for durable storage.
+- **JWT secret** auto-generated in AWS Secrets Manager.
 - **WebSocket streaming** works over the same ALB — no extra config.
-- **Inline task mode** is on (`USE_INLINE_TASKS=true`), so no Redis is provisioned. To scale out with Redis + a Celery worker, see the "Adding Redis" section in the infra README.
+- **Inline task mode** is on (`USE_INLINE_TASKS=true`), so no Redis is provisioned.
 - **The demo works out of the box.** The backend image bundles `demo-repository/` and initializes it as a two-commit git repo on startup. Create a project pointing at `/demo-repository` with base ref `clean` and target ref `risky` to run the full 8-risk analysis. See the infra README's "Running the end-to-end demo on AWS".
 
 Full guide, configuration options, cost notes, and teardown: [`infra/aws-cdk/README.md`](./infra/aws-cdk/README.md).

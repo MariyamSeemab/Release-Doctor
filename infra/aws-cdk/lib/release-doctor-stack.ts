@@ -5,13 +5,11 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr_assets from 'aws-cdk-lib/aws-ecr-assets';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as iam from 'aws-cdk-lib/aws-iam';
 
 /**
- * Release Doctor on AWS — single-stack ECS Fargate deployment.
+ * Release Doctor on AWS — lean single-stack ECS Fargate deployment.
  *
  * Topology:
  *
@@ -23,19 +21,25 @@ import * as iam from 'aws-cdk-lib/aws-iam';
  *   /health, /openapi   else (/)
  *   (backend TG)       (frontend TG)
  *      |                 |
- *   [ Backend Fargate ] [ Frontend Fargate ]  (private subnets)
+ *   [ Backend Fargate ] [ Frontend Fargate ]  (public subnets, public IP)
  *      |
- *   [ RDS PostgreSQL ]  (isolated subnets)
+ *   SQLite (in-container)
  *
- * WebSocket note: the backend streams analysis events over /api/ws/*.
- * ALB natively supports WebSocket upgrade on HTTP listeners, so routing
- * the /api/* path prefix to the backend target group covers it — no
- * special configuration required.
+ * Cost-optimized for a demo/hackathon:
+ *   - No RDS: the backend uses SQLite (the app's built-in zero-infra mode).
+ *   - No NAT gateway: tasks run in public subnets with a public IP so they can
+ *     pull images and reach the internet directly.
+ *   - No Redis/Celery: USE_INLINE_TASKS=true runs analyses in-process.
  *
- * Task/analysis execution runs INLINE inside the FastAPI process
- * (USE_INLINE_TASKS=true), so no Redis/Celery/ElastiCache is provisioned.
- * This keeps the footprint (and cost) minimal. Redis can be added later
- * by introducing an ElastiCache construct and flipping the env var.
+ * This keeps the standing footprint to just an ALB + 2 small Fargate tasks.
+ *
+ * WebSocket note: the backend streams analysis events over /api/ws/*. ALB
+ * natively upgrades WebSocket connections on the HTTP listener, so routing the
+ * /api/* path prefix to the backend target group covers it.
+ *
+ * SQLite note: the backend runs as a single task (desiredCount 1). SQLite is
+ * per-container and not shared, so the backend must not be scaled horizontally.
+ * To scale out, switch to RDS + a shared DATABASE_URL (see infra README).
  */
 export class ReleaseDoctorStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -44,36 +48,22 @@ export class ReleaseDoctorStack extends cdk.Stack {
     const repoRoot = path.join(__dirname, '..', '..', '..');
 
     // Tunables (override at deploy time with -c key=value)
-    const desiredCount = Number(this.node.tryGetContext('desiredCount') ?? 1);
-    const dbAllocatedStorage = Number(
-      this.node.tryGetContext('dbAllocatedStorage') ?? 20
-    );
     const backendCpu = Number(this.node.tryGetContext('backendCpu') ?? 512);
     const backendMemory = Number(
       this.node.tryGetContext('backendMemory') ?? 1024
     );
 
     // ── Networking ──────────────────────────────────────────────────────
-    // 2 AZs, NAT gateway so Fargate tasks in private subnets can pull images
-    // and reach the internet (git clone of target repos, CVE lookups, etc.).
+    // Public subnets only, NO NAT gateway (the biggest hidden cost). Fargate
+    // tasks get a public IP so they can pull images and reach the internet.
     const vpc = new ec2.Vpc(this, 'Vpc', {
       maxAzs: 2,
-      natGateways: 1,
+      natGateways: 0,
       subnetConfiguration: [
         {
           name: 'public',
           subnetType: ec2.SubnetType.PUBLIC,
           cidrMask: 24,
-        },
-        {
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
-        },
-        {
-          name: 'isolated',
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-          cidrMask: 28,
         },
       ],
     });
@@ -83,38 +73,9 @@ export class ReleaseDoctorStack extends cdk.Stack {
     const jwtSecret = new secretsmanager.Secret(this, 'JwtSecret', {
       description: 'Release Doctor JWT signing secret',
       generateSecretString: {
-        // Store as a raw string secret (no JSON) so the container reads it directly.
         passwordLength: 64,
         excludePunctuation: true,
       },
-    });
-
-    // ── Database ────────────────────────────────────────────────────────
-    const dbCredentials = rds.Credentials.fromGeneratedSecret('releasedoctor', {
-      secretName: `${id}/rds-credentials`,
-    });
-
-    const db = new rds.DatabaseInstance(this, 'Postgres', {
-      engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_16_4,
-      }),
-      vpc,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.BURSTABLE4_GRAVITON,
-        ec2.InstanceSize.MICRO
-      ),
-      credentials: dbCredentials,
-      databaseName: 'releasedoctor',
-      allocatedStorage: dbAllocatedStorage,
-      maxAllocatedStorage: 100,
-      storageEncrypted: true,
-      multiAz: false,
-      backupRetention: cdk.Duration.days(7),
-      deletionProtection: false,
-      // Demo/hackathon default: destroy DB with the stack. For production,
-      // switch to RETAIN and enable deletionProtection.
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     // ── ECS cluster ─────────────────────────────────────────────────────
@@ -135,15 +96,11 @@ export class ReleaseDoctorStack extends cdk.Stack {
     });
 
     // The public base URL of the whole app (frontend + API share the ALB).
-    // Used for CORS and CFN outputs. The frontend derives its API/WS URLs
-    // from same-origin at runtime, so no ws:// variant is needed here.
     const appUrl = `http://${alb.loadBalancerDnsName}`;
 
     // ── Container images ────────────────────────────────────────────────
     // Backend is built from the REPO ROOT context (not backend/) so the image
     // can bundle the demo-repository alongside the app. See Dockerfile.backend.
-    // A root .dockerignore keeps the build context lean (excludes node_modules,
-    // .git, cdk.out, etc.).
     const backendImage = new ecr_assets.DockerImageAsset(this, 'BackendImage', {
       directory: repoRoot,
       file: 'Dockerfile.backend',
@@ -154,8 +111,7 @@ export class ReleaseDoctorStack extends cdk.Stack {
     // only known at deploy time (a CloudFormation token), and Docker build
     // args must be concrete before deployment — so we do NOT bake the URL in.
     // Instead the frontend's API client (frontend/lib/api.ts) falls back to
-    // same-origin (window.location) at runtime when NEXT_PUBLIC_* is unset,
-    // which resolves to this ALB automatically.
+    // same-origin (window.location) at runtime when NEXT_PUBLIC_* is unset.
     const frontendImage = new ecr_assets.DockerImageAsset(
       this,
       'FrontendImage',
@@ -180,10 +136,6 @@ export class ReleaseDoctorStack extends cdk.Stack {
       }
     );
 
-    // The RDS-generated secret is JSON with discrete fields
-    // {username, password, host, port, dbname, ...}. The backend consumes a
-    // single async DATABASE_URL, so we inject the fields as DB_* env vars and
-    // compose the URL in the container entrypoint (command below).
     backendTaskDef.addContainer('backend', {
       image: ecs.ContainerImage.fromDockerImageAsset(backendImage),
       logging: ecs.LogDrivers.awsLogs({
@@ -191,6 +143,8 @@ export class ReleaseDoctorStack extends cdk.Stack {
         logGroup: backendLogGroup,
       }),
       environment: {
+        // SQLite in-container — the app's built-in zero-infra database mode.
+        DATABASE_URL: 'sqlite+aiosqlite:////app/release_doctor.db',
         USE_INLINE_TASKS: 'true',
         LOG_LEVEL: 'INFO',
         JWT_ALGORITHM: 'HS256',
@@ -200,34 +154,24 @@ export class ReleaseDoctorStack extends cdk.Stack {
       },
       secrets: {
         JWT_SECRET: ecs.Secret.fromSecretsManager(jwtSecret),
-        DB_USER: ecs.Secret.fromSecretsManager(db.secret!, 'username'),
-        DB_PASSWORD: ecs.Secret.fromSecretsManager(db.secret!, 'password'),
-        DB_HOST: ecs.Secret.fromSecretsManager(db.secret!, 'host'),
-        DB_PORT: ecs.Secret.fromSecretsManager(db.secret!, 'port'),
-        DB_NAME: ecs.Secret.fromSecretsManager(db.secret!, 'dbname'),
       },
       portMappings: [{ containerPort: 8000 }],
-      // No command override: the image's entrypoint (backend/entrypoint.sh)
-      // composes DATABASE_URL from the DB_* secrets, runs migrations, and
-      // starts uvicorn.
+      // The image entrypoint (backend/entrypoint.sh) initializes the demo git
+      // repo, runs migrations, and starts uvicorn. DATABASE_URL is set above,
+      // so no DB_* composition is needed.
     });
 
     const backendService = new ecs.FargateService(this, 'BackendService', {
       cluster,
       taskDefinition: backendTaskDef,
-      desiredCount,
-      assignPublicIp: false,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      // SQLite is per-container: keep the backend to a single task.
+      desiredCount: 1,
+      assignPublicIp: true,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       circuitBreaker: { rollback: true },
-      minHealthyPercent: 100,
-      maxHealthyPercent: 200,
+      minHealthyPercent: 0,
+      maxHealthyPercent: 100,
     });
-
-    // Backend must reach RDS.
-    db.connections.allowDefaultPortFrom(
-      backendService,
-      'Backend Fargate to Postgres'
-    );
 
     // ── Frontend Fargate service ────────────────────────────────────────
     const frontendLogGroup = new logs.LogGroup(this, 'FrontendLogs', {
@@ -252,9 +196,8 @@ export class ReleaseDoctorStack extends cdk.Stack {
       }),
       environment: {
         NODE_ENV: 'production',
-        // No NEXT_PUBLIC_* here: those are build-time-only in Next.js and are
-        // intentionally left unset so the client falls back to same-origin
-        // (this ALB) at runtime. See frontend/lib/api.ts.
+        // No NEXT_PUBLIC_* here: build-time-only in Next.js and intentionally
+        // left unset so the client uses same-origin (this ALB) at runtime.
       },
       portMappings: [{ containerPort: 3000 }],
     });
@@ -262,12 +205,12 @@ export class ReleaseDoctorStack extends cdk.Stack {
     const frontendService = new ecs.FargateService(this, 'FrontendService', {
       cluster,
       taskDefinition: frontendTaskDef,
-      desiredCount,
-      assignPublicIp: false,
-      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
+      desiredCount: 1,
+      assignPublicIp: true,
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       circuitBreaker: { rollback: true },
-      minHealthyPercent: 100,
-      maxHealthyPercent: 200,
+      minHealthyPercent: 0,
+      maxHealthyPercent: 100,
     });
 
     // ── ALB routing ─────────────────────────────────────────────────────
@@ -327,10 +270,6 @@ export class ReleaseDoctorStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'HealthURL', {
       value: `${appUrl}/health`,
       description: 'Backend health check',
-    });
-    new cdk.CfnOutput(this, 'DbSecretArn', {
-      value: db.secret?.secretArn ?? 'n/a',
-      description: 'RDS credentials secret ARN',
     });
   }
 }
